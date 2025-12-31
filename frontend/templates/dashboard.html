@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CIRA Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header">
+        <h1>CIRA - Cloud Incident Response Analyzer</h1>
+        <p>Real-time cloud security monitoring</p>
+    </div>
+
+    <div class="container">
+        <!-- סטטיסטיקות -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total_instances }}</div>
+                <div class="stat-label">Total Instances</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value">{{ stats.running }}</div>
+                <div class="stat-label">Running</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-value">{{ stats.stopped }}</div>
+                <div class="stat-label">Stopped</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-value">{{ stats.open_alerts }}</div>
+                <div class="stat-label">Open Alerts</div>
+            </div>
+        </div>
+
+        <!-- טבלת שרתים -->
+        <div class="section">
+            <h2>Cloud Instances</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Instance ID</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Public IP</th>
+                            <th>Region</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for instance in instances %}
+                        <tr>
+                            <td>{{ instance.name or '-' }}</td>
+                            <td class="monospace">{{ instance.instance_id }}</td>
+                            <td>{{ instance.instance_type }}</td>
+                            <td>
+                                <span class="status status-{{ instance.state }}">
+                                    {{ instance.state }}
+                                </span>
+                            </td>
+                            <td>{{ instance.public_ip or '-' }}</td>
+                            <td>{{ instance.region }}</td>
+                            <td>{{ instance.last_seen.strftime('%H:%M %d/%m') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- טבלת התראות -->
+        <div class="section">
+            <h2>Security Alerts</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>Alert</th>
+                            <th>Instance</th>
+                            <th>Description</th>
+                            <th>Time</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for alert in alerts %}
+                        <tr>
+                            <td>
+                                <span class="severity severity-{{ alert.severity }}">
+                                    {{ alert.severity.upper() }}
+                                </span>
+                            </td>
+                            <td>{{ alert.title }}</td>
+                            <td class="monospace">{{ alert.instance_id }}</td>
+                            <td>{{ alert.description }}</td>
+                            <td>{{ alert.created_at.strftime('%H:%M %d/%m') }}</td>
+                            <td>
+                                <span class="status status-open">{{ alert.status }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // רענון אוטומטי כל 30 שניות
+        setTimeout(() => location.reload(), 30000);
+    </script>
+</body>
+</html>
