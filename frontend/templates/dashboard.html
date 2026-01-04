@@ -1,116 +1,242 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CIRA Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>C.I.R.A Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 2rem;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: #06b6d4; margin-bottom: 1rem; font-size: 2.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-left: 4px solid #06b6d4;
+            padding: 1.5rem;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+        .stat:hover { 
+            transform: translateY(-2px);
+            border-color: #06b6d4;
+            box-shadow: 0 8px 16px rgba(6, 182, 212, 0.1);
+        }
+        .stat-value { font-size: 2.5rem; font-weight: bold; color: #06b6d4; }
+        .stat-label { font-size: 0.9rem; color: #cbd5e1; margin-top: 0.5rem; }
+        .card { background: #1e293b; border: 1px solid #334155; padding: 2rem; border-radius: 6px; margin-bottom: 2rem; }
+        .card h2 { margin-bottom: 1.5rem; color: #06b6d4; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { background: #0f172a; padding: 1rem; text-align: left; border-bottom: 2px solid #334155; font-weight: bold; }
+        td { padding: 0.75rem; border-bottom: 1px solid #334155; }
+        tr:hover { background: rgba(6, 182, 212, 0.05); }
+        .critical { color: #dc2626; font-weight: bold; }
+        .high { color: #f59e0b; }
+        .medium { color: #eab308; }
+        .low { color: #3b82f6; }
+        .pass { color: #10b981; }
+        .fail { color: #ef4444; }
+        .loading { text-align: center; padding: 3rem; font-size: 1.2rem; }
+        .error { color: #ef4444; background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 6px; border: 1px solid #ef4444; }
+        .btn { 
+            background: #06b6d4; 
+            color: white; 
+            border: none; 
+            padding: 0.7rem 1.5rem; 
+            border-radius: 4px; 
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn:hover { 
+            background: #0891b2;
+            transform: scale(1.05);
+        }
+        .btn:active { transform: scale(0.95); }
+        code { 
+            background: #0f172a; 
+            padding: 0.2rem 0.5rem; 
+            border-radius: 3px; 
+            font-family: 'Monaco', 'Courier New', monospace;
+            color: #06b6d4;
+        }
+        .resources-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+        .resource-item {
+            background: #0f172a;
+            padding: 1rem;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #334155;
+            transition: all 0.3s;
+        }
+        .resource-item:hover {
+            border-color: #06b6d4;
+            transform: translateY(-2px);
+        }
+        .resource-count { font-size: 2rem; font-weight: bold; color: #06b6d4; }
+        .resource-label { font-size: 0.85rem; color: #cbd5e1; margin-top: 0.5rem; }
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        footer {
+            text-align: center;
+            color: #cbd5e1;
+            font-size: 0.85rem;
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid #334155;
+        }
+        @media (max-width: 768px) {
+            .header { flex-direction: column; align-items: flex-start; }
+            .container { padding: 1rem; }
+            .stats { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-    <div class="header">
-        <h1>CIRA - Cloud Incident Response Analyzer</h1>
-        <p>Real-time cloud security monitoring</p>
-    </div>
-
     <div class="container">
-        <!-- סטטיסטיקות -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value">{{ stats.total_instances }}</div>
-                <div class="stat-label">Total Instances</div>
-            </div>
-            <div class="stat-card success">
-                <div class="stat-value">{{ stats.running }}</div>
-                <div class="stat-label">Running</div>
-            </div>
-            <div class="stat-card danger">
-                <div class="stat-value">{{ stats.stopped }}</div>
-                <div class="stat-label">Stopped</div>
-            </div>
-            <div class="stat-card warning">
-                <div class="stat-value">{{ stats.open_alerts }}</div>
-                <div class="stat-label">Open Alerts</div>
-            </div>
+        <div class="header">
+            <h1>🔒 C.I.R.A AWS Security Assessment</h1>
+            <button class="btn" onclick="location.reload()">🔄 Refresh</button>
         </div>
+        
+        <!-- Render Jinja data if available -->
+        {% if data %}
+            <!-- STATS FROM SERVER -->
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">{{ data.summary.total_checks }}</div>
+                    <div class="stat-label">📋 Total Checks</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" style="color: #10b981;">{{ data.summary.passed }}</div>
+                    <div class="stat-label">✅ Passed</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" style="color: #ef4444;">{{ data.summary.failed }}</div>
+                    <div class="stat-label">❌ Failed</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ data.summary.pass_rate }}</div>
+                    <div class="stat-label">📊 Pass Rate</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" style="color: #dc2626;">{{ data.summary.severity.critical }}</div>
+                    <div class="stat-label">🔴 Critical</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" style="color: #f59e0b;">{{ data.summary.severity.high }}</div>
+                    <div class="stat-label">🟠 High</div>
+                </div>
+            </div>
 
-        <!-- טבלת שרתים -->
-        <div class="section">
-            <h2>Cloud Instances</h2>
-            <div class="table-container">
+            <!-- FINDINGS TABLE -->
+            <div class="card">
+                <h2>🔍 Security Findings ({{ data.findings|length }})</h2>
                 <table>
                     <thead>
                         <tr>
-                            <th>Name</th>
-                            <th>Instance ID</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                            <th>Public IP</th>
-                            <th>Region</th>
-                            <th>Last Seen</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for instance in instances %}
-                        <tr>
-                            <td>{{ instance.name or '-' }}</td>
-                            <td class="monospace">{{ instance.instance_id }}</td>
-                            <td>{{ instance.instance_type }}</td>
-                            <td>
-                                <span class="status status-{{ instance.state }}">
-                                    {{ instance.state }}
-                                </span>
-                            </td>
-                            <td>{{ instance.public_ip or '-' }}</td>
-                            <td>{{ instance.region }}</td>
-                            <td>{{ instance.last_seen.strftime('%H:%M %d/%m') }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- טבלת התראות -->
-        <div class="section">
-            <h2>Security Alerts</h2>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
+                            <th>Check ID</th>
+                            <th>Title</th>
+                            <th>Service</th>
                             <th>Severity</th>
-                            <th>Alert</th>
-                            <th>Instance</th>
-                            <th>Description</th>
-                            <th>Time</th>
                             <th>Status</th>
+                            <th>Score</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for alert in alerts %}
+                        {% for finding in data.findings %}
                         <tr>
+                            <td><code>{{ finding.check_id }}</code></td>
+                            <td><strong>{{ finding.check_title }}</strong></td>
+                            <td>{{ finding.service|upper }}</td>
                             <td>
-                                <span class="severity severity-{{ alert.severity }}">
-                                    {{ alert.severity.upper() }}
+                                <span class="status-badge {{ finding.severity|lower }}" style="background: 
+                                    {% if finding.severity == 'CRITICAL' %}rgba(220, 38, 38, 0.2); color: #dc2626;
+                                    {% elif finding.severity == 'HIGH' %}rgba(245, 158, 11, 0.2); color: #f59e0b;
+                                    {% elif finding.severity == 'MEDIUM' %}rgba(234, 179, 8, 0.2); color: #eab308;
+                                    {% else %}rgba(59, 130, 246, 0.2); color: #3b82f6;
+                                    {% endif %}">
+                                    {{ finding.severity }}
                                 </span>
                             </td>
-                            <td>{{ alert.title }}</td>
-                            <td class="monospace">{{ alert.instance_id }}</td>
-                            <td>{{ alert.description }}</td>
-                            <td>{{ alert.created_at.strftime('%H:%M %d/%m') }}</td>
                             <td>
-                                <span class="status status-open">{{ alert.status }}</span>
+                                <span class="status-badge" style="background: 
+                                    {% if finding.status == 'PASS' %}rgba(16, 185, 129, 0.2); color: #10b981;
+                                    {% else %}rgba(239, 68, 68, 0.2); color: #ef4444;
+                                    {% endif %}">
+                                    {{ finding.status }}
+                                </span>
                             </td>
+                            <td><strong>{{ finding.threat_score }}/100</strong></td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-        </div>
-    </div>
 
-    <script>
-        // רענון אוטומטי כל 30 שניות
-        setTimeout(() => location.reload(), 30000);
-    </script>
+            <!-- RESOURCES -->
+            {% if data.resources %}
+            <div class="card">
+                <h2>📊 Discovered AWS Resources</h2>
+                <div class="resources-grid">
+                    <div class="resource-item">
+                        <div class="resource-count">{{ data.resources.ec2_instances|length }}</div>
+                        <div class="resource-label">🖥️ EC2 Instances</div>
+                    </div>
+                    <div class="resource-item">
+                        <div class="resource-count">{{ data.resources.s3_buckets|length }}</div>
+                        <div class="resource-label">🪣 S3 Buckets</div>
+                    </div>
+                    <div class="resource-item">
+                        <div class="resource-count">{{ data.resources.iam_roles|length }}</div>
+                        <div class="resource-label">🔐 IAM Roles</div>
+                    </div>
+                    <div class="resource-item">
+                        <div class="resource-count">{{ data.resources.rds_databases|length }}</div>
+                        <div class="resource-label">🗄️ RDS Databases</div>
+                    </div>
+                    <div class="resource-item">
+                        <div class="resource-count">{{ data.resources.elb_load_balancers|length }}</div>
+                        <div class="resource-label">⚖️ Load Balancers</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- TIMESTAMP -->
+            <footer>
+                <p>✅ Last Assessment: {{ data.timestamp }}</p>
+                <p>Environment: <strong>{{ data.environment|upper }}</strong> | Region: <strong>{{ data.region }}</strong></p>
+            </footer>
+
+        {% else %}
+            <div class="error">
+                ⚠️ <strong>No assessment data available</strong><br>
+                Run the scanner first: <code>python aws_cspm_scanner.py</code>
+            </div>
+        {% endif %}
+    </div>
 </body>
 </html>
