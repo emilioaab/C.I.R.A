@@ -14,6 +14,7 @@
         }
         .container { max-width: 1400px; margin: 0 auto; }
         h1 { color: #06b6d4; margin-bottom: 1rem; font-size: 2.5rem; }
+        h2 { color: #06b6d4; margin-bottom: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
         .stats {
             display: grid;
@@ -37,9 +38,8 @@
         .stat-value { font-size: 2.5rem; font-weight: bold; color: #06b6d4; }
         .stat-label { font-size: 0.9rem; color: #cbd5e1; margin-top: 0.5rem; }
         .card { background: #1e293b; border: 1px solid #334155; padding: 2rem; border-radius: 6px; margin-bottom: 2rem; }
-        .card h2 { margin-bottom: 1.5rem; color: #06b6d4; }
         table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th { background: #0f172a; padding: 1rem; text-align: left; border-bottom: 2px solid #334155; font-weight: bold; }
+        th { background: #0f172a; padding: 1rem; text-align: left; border-bottom: 2px solid #334155; font-weight: bold; color: #06b6d4; }
         td { padding: 0.75rem; border-bottom: 1px solid #334155; }
         tr:hover { background: rgba(6, 182, 212, 0.05); }
         .critical { color: #dc2626; font-weight: bold; }
@@ -112,48 +112,70 @@
             .container { padding: 1rem; }
             .stats { grid-template-columns: 1fr; }
         }
+        
+        #activity-container table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        #activity-container th {
+            background: #0f172a;
+            color: #06b6d4;
+            font-weight: 600;
+            text-align: left;
+            padding: 1rem;
+            border-bottom: 2px solid #334155;
+        }
+        
+        #activity-container td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #334155;
+        }
+        
+        #activity-container tr:hover {
+            background: rgba(6, 182, 212, 0.05);
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🔒 C.I.R.A AWS Security Assessment</h1>
-            <button class="btn" onclick="location.reload()">🔄 Refresh</button>
+            <h1>C.I.R.A AWS Security Assessment Dashboard</h1>
+            <button class="btn" onclick="location.reload()">Refresh</button>
         </div>
         
-        <!-- Render Jinja data if available -->
         {% if data %}
             <!-- STATS FROM SERVER -->
             <div class="stats">
                 <div class="stat">
                     <div class="stat-value">{{ data.summary.total_checks }}</div>
-                    <div class="stat-label">📋 Total Checks</div>
+                    <div class="stat-label">Total Checks</div>
                 </div>
                 <div class="stat">
                     <div class="stat-value" style="color: #10b981;">{{ data.summary.passed }}</div>
-                    <div class="stat-label">✅ Passed</div>
+                    <div class="stat-label">Passed</div>
                 </div>
                 <div class="stat">
                     <div class="stat-value" style="color: #ef4444;">{{ data.summary.failed }}</div>
-                    <div class="stat-label">❌ Failed</div>
+                    <div class="stat-label">Failed</div>
                 </div>
                 <div class="stat">
                     <div class="stat-value">{{ data.summary.pass_rate }}</div>
-                    <div class="stat-label">📊 Pass Rate</div>
+                    <div class="stat-label">Pass Rate</div>
                 </div>
                 <div class="stat">
                     <div class="stat-value" style="color: #dc2626;">{{ data.summary.severity.critical }}</div>
-                    <div class="stat-label">🔴 Critical</div>
+                    <div class="stat-label">Critical Findings</div>
                 </div>
                 <div class="stat">
                     <div class="stat-value" style="color: #f59e0b;">{{ data.summary.severity.high }}</div>
-                    <div class="stat-label">🟠 High</div>
+                    <div class="stat-label">High Findings</div>
                 </div>
             </div>
 
             <!-- FINDINGS TABLE -->
             <div class="card">
-                <h2>🔍 Security Findings ({{ data.findings|length }})</h2>
+                <h2>Security Findings ({{ data.findings|length }})</h2>
                 <table>
                     <thead>
                         <tr>
@@ -162,7 +184,7 @@
                             <th>Service</th>
                             <th>Severity</th>
                             <th>Status</th>
-                            <th>Score</th>
+                            <th>Threat Score</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -199,44 +221,124 @@
             <!-- RESOURCES -->
             {% if data.resources %}
             <div class="card">
-                <h2>📊 Discovered AWS Resources</h2>
+                <h2>Discovered AWS Resources</h2>
                 <div class="resources-grid">
                     <div class="resource-item">
                         <div class="resource-count">{{ data.resources.ec2_instances|length }}</div>
-                        <div class="resource-label">🖥️ EC2 Instances</div>
+                        <div class="resource-label">EC2 Instances</div>
                     </div>
                     <div class="resource-item">
                         <div class="resource-count">{{ data.resources.s3_buckets|length }}</div>
-                        <div class="resource-label">🪣 S3 Buckets</div>
+                        <div class="resource-label">S3 Buckets</div>
                     </div>
                     <div class="resource-item">
                         <div class="resource-count">{{ data.resources.iam_roles|length }}</div>
-                        <div class="resource-label">🔐 IAM Roles</div>
+                        <div class="resource-label">IAM Roles</div>
                     </div>
                     <div class="resource-item">
                         <div class="resource-count">{{ data.resources.rds_databases|length }}</div>
-                        <div class="resource-label">🗄️ RDS Databases</div>
+                        <div class="resource-label">RDS Databases</div>
                     </div>
                     <div class="resource-item">
                         <div class="resource-count">{{ data.resources.elb_load_balancers|length }}</div>
-                        <div class="resource-label">⚖️ Load Balancers</div>
+                        <div class="resource-label">Load Balancers</div>
                     </div>
                 </div>
             </div>
             {% endif %}
 
+            <!-- RECENT ACTIVITY WIDGET (PHASE 2) -->
+            <div class="card">
+                <h2>Recent Activity - CloudTrail Logs (Phase 2)</h2>
+                <div id="activity-container" style="min-height: 200px;">
+                    <div class="loading">Loading recent activity...</div>
+                </div>
+            </div>
+
             <!-- TIMESTAMP -->
             <footer>
-                <p>✅ Last Assessment: {{ data.timestamp }}</p>
+                <p>Assessment Timestamp: {{ data.timestamp }}</p>
                 <p>Environment: <strong>{{ data.environment|upper }}</strong> | Region: <strong>{{ data.region }}</strong></p>
+                <p style="margin-top: 1rem; font-size: 0.85rem; color: #94a3b8;">Phase 1: Security Assessment | Phase 2: Log Collection</p>
             </footer>
 
         {% else %}
             <div class="error">
-                ⚠️ <strong>No assessment data available</strong><br>
-                Run the scanner first: <code>python aws_cspm_scanner.py</code>
+                No assessment data available. Run the scanner first: <code>python aws_cspm_scanner.py</code>
             </div>
         {% endif %}
     </div>
+
+    <script>
+        const API = 'http://localhost:5000/api';
+
+        // Load Recent Activity (Phase 2 Logs)
+        async function loadRecentActivity() {
+            try {
+                const res = await fetch(API + '/logs?source=cloudtrail&limit=10');
+                if (!res.ok) throw new Error('Logs API Error');
+                const data = await res.json();
+
+                let html = '';
+                
+                if (data.total === 0) {
+                    html = '<div class="loading">No logs available yet. Run log collector to collect CloudTrail logs.</div>';
+                } else {
+                    // Display summary
+                    html += '<div style="margin-bottom: 1.5rem;">';
+                    html += `<p style="color: #cbd5e1; margin-bottom: 0.5rem;">Total CloudTrail Logs: <strong style="color: #06b6d4;">${data.total}</strong></p>`;
+                    html += '</div>';
+
+                    // Display logs table
+                    html += '<table style="width: 100%; font-size: 0.9rem; border-collapse: collapse;">';
+                    html += '<tr style="border-bottom: 2px solid #334155;"><th style="text-align: left; padding: 1rem;">Timestamp</th><th style="text-align: left; padding: 1rem;">Service</th><th style="text-align: left; padding: 1rem;">Action</th><th style="text-align: left; padding: 1rem;">Principal</th><th style="text-align: left; padding: 1rem;">Severity</th><th style="text-align: left; padding: 1rem;">Status</th></tr>';
+                    
+                    data.logs.forEach(log => {
+                        const timestamp = new Date(log.timestamp).toLocaleString();
+                        
+                        const severityColors = {
+                            'critical': {bg: 'rgba(220, 38, 38, 0.2)', color: '#dc2626'},
+                            'high': {bg: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b'},
+                            'medium': {bg: 'rgba(234, 179, 8, 0.2)', color: '#eab308'},
+                            'low': {bg: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6'},
+                            'info': {bg: 'rgba(6, 182, 212, 0.2)', color: '#06b6d4'}
+                        };
+                        
+                        const sev = severityColors[log.severity] || severityColors['info'];
+                        const statusColor = log.status === 'success' ? '#10b981' : '#ef4444';
+
+                        html += `<tr style="border-bottom: 1px solid #334155;">
+                            <td style="padding: 0.75rem; font-size: 0.85rem; color: #94a3b8;">${timestamp}</td>
+                            <td style="padding: 0.75rem;"><code style="color: #06b6d4; background: rgba(6, 182, 212, 0.1); padding: 0.25rem 0.5rem; border-radius: 3px;">${log.service.toUpperCase()}</code></td>
+                            <td style="padding: 0.75rem; color: #cbd5e1;"><strong>${log.action}</strong></td>
+                            <td style="padding: 0.75rem; font-size: 0.8rem; color: #94a3b8;">${log.principal.substring(0, 30)}...</td>
+                            <td style="padding: 0.75rem;">
+                                <span style="background: ${sev.bg}; color: ${sev.color}; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
+                                    ${log.severity}
+                                </span>
+                            </td>
+                            <td style="padding: 0.75rem;">
+                                <span style="color: ${statusColor}; font-weight: 600;">${log.status.toUpperCase()}</span>
+                            </td>
+                        </tr>`;
+                    });
+                    
+                    html += '</table>';
+                }
+
+                document.getElementById('activity-container').innerHTML = html;
+                
+            } catch (e) {
+                document.getElementById('activity-container').innerHTML = `<div class="error">Logs not available yet. Run log collector first.<br><br>Command: python -c "from backend.connectors.aws.logs import LogCollector; collector = LogCollector(); collector.collect_all(); collector.save_to_file()"</div>`;
+            }
+        }
+
+        // Load Recent Activity on page load
+        if (document.getElementById('activity-container')) {
+            loadRecentActivity();
+            // Auto-refresh every 15 seconds
+            setInterval(loadRecentActivity, 15000);
+        }
+    </script>
 </body>
 </html>

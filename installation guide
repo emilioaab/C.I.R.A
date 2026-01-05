@@ -1,0 +1,241 @@
+FILE GUIDE AND INSTALLATION
+===========================
+
+This package contains all files needed for C.I.R.A AWS Security Assessment platform.
+
+FILES INCLUDED
+==============
+
+1. 00_SECURITY_WARNING.txt
+   - CRITICAL: Read this first
+   - Explains security issues with exposed credentials
+   - Contains mandatory action items
+
+2. 01_api.py
+   - Flask REST API server
+   - 11 endpoints for assessment and log data
+   - Serves Jinja2 dashboard
+   - Run: python api.py
+
+3. 02_aws_cspm_scanner.py
+   - Main security assessment tool
+   - Runs 42 security checks
+   - Generates JSON reports
+   - Run: python aws_cspm_scanner.py
+
+4. 03_test_aws_connection.py
+   - Tests AWS credentials
+   - Shows account resources
+   - Creates test instances
+   - Run: python test_aws_connection.py
+
+5. 04_requirements.txt
+   - Python dependencies
+   - Install: pip install -r requirements.txt
+
+6. 05_README.md
+   - Project documentation
+   - Feature descriptions
+   - API reference
+   - Usage examples
+
+7. 06_env_template.txt
+   - Environment variables template
+   - Copy to .env and fill in values
+   - NEVER commit to git
+
+8. 07_setup_aws_environments.py
+   - Configures AWS environment
+   - Enables CloudTrail
+   - Enables VPC Flow Logs
+   - Creates test resources
+   - Run: python setup_aws_environments.py
+
+9. 08_.gitignore
+   - Git ignore rules
+   - Prevents accidental credential commits
+   - Place in repository root
+
+INSTALLATION STEPS
+==================
+
+Step 1: Security Setup
+   a. Read 00_SECURITY_WARNING.txt
+   b. Revoke any exposed credentials
+   c. Generate new AWS credentials
+   d. DO NOT commit credentials to git
+
+Step 2: Repository Setup
+   a. Create directory: mkdir cira-project && cd cira-project
+   b. Copy all .py files
+   c. Copy 08_.gitignore as .gitignore
+   d. Copy 04_requirements.txt as requirements.txt
+   e. Copy 05_README.md as README.md
+   f. Initialize git: git init
+
+Step 3: Python Environment
+   a. Create venv: python3 -m venv venv
+   b. Activate: source venv/bin/activate
+   c. Install: pip install -r requirements.txt
+
+Step 4: Configuration
+   a. Copy 06_env_template.txt to .env
+   b. Edit .env with your AWS credentials
+   c. Verify .env is in .gitignore
+   d. NEVER commit .env
+
+Step 5: AWS Setup
+   a. Run: python test_aws_connection.py
+   b. Run: python setup_aws_environments.py
+   c. Verify CloudTrail is enabled
+   d. Verify VPC Flow Logs are configured
+
+Step 6: Run Scanner
+   a. Run: python aws_cspm_scanner.py
+   b. Wait for completion
+   c. Check cira_assessment_*.json was created
+
+Step 7: Run API Server
+   a. Run: python api.py
+   b. API available at http://localhost:5000
+   c. Dashboard at http://localhost:5000/
+
+Step 8: Verify Installation
+   a. Visit http://localhost:5000 in browser
+   b. Check dashboard displays assessment data
+   c. Test API: curl http://localhost:5000/api/health
+
+DIRECTORY STRUCTURE (After Installation)
+========================================
+
+cira-project/
+├── .env (DO NOT COMMIT)
+├── .gitignore
+├── README.md
+├── requirements.txt
+├── api.py
+├── aws_cspm_scanner.py
+├── test_aws_connection.py
+├── setup_aws_environments.py
+├── venv/ (virtual environment)
+├── backend/
+│   └── connectors/
+│       └── aws/
+│           ├── assessment.py
+│           ├── log_schema.py
+│           ├── log_config.py
+│           ├── logs.py
+│           └── __init__.py
+├── frontend/
+│   ├── templates/
+│   │   └── dashboard.html
+│   └── static/
+├── cira_assessment_*.json (generated reports)
+└── logs_*.json (generated logs)
+
+RUNNING THE SYSTEM
+==================
+
+Terminal 1 - API Server
+   $ source venv/bin/activate
+   $ python api.py
+   Output: Application Running on: http://localhost:5000
+
+Terminal 2 - Run Scanner (optional, can run separately)
+   $ source venv/bin/activate
+   $ python aws_cspm_scanner.py
+   Output: cira_assessment_20260105_093000.json
+
+Terminal 3 - Run Log Collector (optional, Phase 2)
+   $ source venv/bin/activate
+   $ python << 'EOF'
+   from backend.connectors.aws.logs import LogCollector
+   collector = LogCollector()
+   records = collector.collect_all()
+   filename = collector.save_to_file()
+   print(f"Collected {len(records)} logs: {filename}")
+   EOF
+
+Browser
+   Visit http://localhost:5000
+   View dashboard with:
+   - Security assessment results
+   - CloudTrail logs
+   - Compliance status
+
+QUICK REFERENCE
+===============
+
+Test connection:
+   python test_aws_connection.py
+
+Run assessment:
+   python aws_cspm_scanner.py
+
+Start API:
+   python api.py
+
+Get logs:
+   curl http://localhost:5000/api/logs?limit=10
+
+Get stats:
+   curl http://localhost:5000/api/logs/stats
+
+Get findings:
+   curl http://localhost:5000/api/findings
+
+TROUBLESHOOTING
+===============
+
+Credentials Error:
+   - Check .env exists in project root
+   - Verify AWS_ACCESS_KEY_ID is set
+   - Verify AWS_SECRET_ACCESS_KEY is set
+   - Run: python test_aws_connection.py
+
+No Assessment Data:
+   - Run: python aws_cspm_scanner.py
+   - Wait for completion
+   - Check cira_assessment_*.json was created
+
+Dashboard Not Loading:
+   - Ensure api.py is running
+   - Check http://localhost:5000
+   - Run assessment first if no data
+
+Import Errors:
+   - Verify venv is activated
+   - Verify requirements installed: pip install -r requirements.txt
+   - Check Python version: python --version (must be 3.12+)
+
+SECURITY NOTES
+==============
+
+1. Never commit .env file
+2. Rotate AWS credentials regularly
+3. Use IAM roles in production
+4. Enable CloudTrail for all regions
+5. Enable S3 versioning and MFA delete
+6. Review CloudTrail logs regularly
+7. Set up log retention policies
+8. Use least privilege IAM policies
+
+SUPPORT
+=======
+
+Documentation: See README.md
+Issues: Check error messages in terminal
+Help: Review logs in ~/.aws/cloudtrail
+
+NEXT STEPS
+==========
+
+1. Install as above
+2. Run setup_aws_environments.py
+3. Run aws_cspm_scanner.py
+4. Start api.py
+5. View dashboard at http://localhost:5000
+6. Review security findings
+7. Plan remediation
+
+For more details, see README.md

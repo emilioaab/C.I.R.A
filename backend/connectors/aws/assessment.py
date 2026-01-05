@@ -33,7 +33,7 @@ class AWSAssessment(CloudConnector):
             self.rds = boto3.client('rds', region_name=region)
             self.elb = boto3.client('elbv2', region_name=region)
         except Exception as e:
-            print(f"⚠️  AWS connection error: {e}")
+            print(f"AWS connection error: {e}")
     
     def add_finding(
         self,
@@ -75,7 +75,7 @@ class AWSAssessment(CloudConnector):
     
     def assess_iam(self) -> List[Finding]:
         """Assess IAM configuration"""
-        print("🔍 Assessing IAM...")
+        print("Assessing IAM...")
         
         findings = []
         
@@ -264,7 +264,7 @@ class AWSAssessment(CloudConnector):
     
     def assess_network(self) -> List[Finding]:
         """Assess network security"""
-        print("🔍 Assessing Network...")
+        print("Assessing Network...")
         
         try:
             # Check security groups
@@ -581,7 +581,7 @@ class AWSAssessment(CloudConnector):
     
     def assess_compliance(self) -> List[Finding]:
         """Assess compliance frameworks"""
-        print("🔍 Assessing Compliance...")
+        print("Assessing Compliance...")
         
         try:
             # Check CloudTrail
@@ -656,7 +656,7 @@ class AWSAssessment(CloudConnector):
     
     def assess_logging(self) -> List[Finding]:
         """Assess logging configuration"""
-        print("🔍 Assessing Logging...")
+        print("Assessing Logging...")
         
         try:
             # Check CloudWatch logs
@@ -697,7 +697,7 @@ class AWSAssessment(CloudConnector):
     
     def collect_logs(self) -> Dict:
         """Collect logs from CloudTrail, CloudWatch, etc."""
-        print("📋 Log collection (future implementation)")
+        print("Log collection (future implementation)")
         return {
             'status': 'not_implemented',
             'message': 'Log collection will be implemented in Phase 2'
@@ -709,7 +709,7 @@ class AWSAssessment(CloudConnector):
     
     def deploy_forensics(self, instance_id: str) -> Dict:
         """Deploy Velociraptor-like agent"""
-        print("🔍 Forensics deployment (future implementation)")
+        print("Forensics deployment (future implementation)")
         return {
             'status': 'not_implemented',
             'message': 'Forensics deployment will be implemented in Phase 3',
