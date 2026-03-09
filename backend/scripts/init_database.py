@@ -1,50 +1,35 @@
-"""
-Initialize PostgreSQL Database
-Creates all tables for C.I.R.A
-"""
-
-from backend.api.models import Base
-from sqlalchemy import create_engine
 import os
+import sys
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
+# Load environment
 load_dotenv()
 
-print("=" * 60)
-print("Database Initialization")
-print("=" * 60)
+# Database connection
+DB_URL = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 
-def get_db_url():
-    """Get database URL from environment variables"""
-    return f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+# Import models
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+from backend.api.models import Base
 
+# Create engine
+engine = create_engine(DB_URL)
+
+# Create tables
 try:
-    print("\nConnecting to PostgreSQL...")
-    engine = create_engine(get_db_url())
-    
-    print("Creating all tables...")
     Base.metadata.create_all(engine)
-    
-    print("\nOK: Tables created successfully!")
+    print("\n" + "="*80)
+    print("OK: Database tables created successfully!")
+    print("="*80)
     print("\nTables created:")
     print("   - assessments")
-    print("   - log_events")
     print("   - findings")
     print("   - resources")
+    print("   - log_events")
     print("   - compliance_status")
-    
-    print("\nNext steps:")
-    print("   1. Run: python backend/scripts/create_test_data.py")
-    print("   2. Run: python api.py")
-    print("   3. Visit: http://localhost:5000")
-    
+    print("\n" + "="*80 + "\n")
 except Exception as e:
-    print(f"\nFAIL: {e}")
-    print("\nTroubleshooting:")
-    print("   - Check PostgreSQL is running")
-    print("   - Verify .env has correct DB credentials")
-    print("   - Ensure database exists")
-    print("\nCreate database with:")
-    print("   createdb cira_db")
-    print("\nCreate user with:")
-    print("   createuser -d -l -P cira_user")
+    print(f"FAIL: Error creating tables: {e}")
+    sys.exit(1)
