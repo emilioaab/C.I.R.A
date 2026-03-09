@@ -1,39 +1,49 @@
 """
 Create Test Data for C.I.R.A
-Populates database with sample data for testing
+Populates DB with realistic sample data for testing the dashboard
 """
+
+import os
+import sys
+import uuid
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from backend.api.models import Base, Assessment, Finding, Resource, LogEvent, ComplianceStatus
-from datetime import datetime, timedelta
-import uuid
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-print("=" * 60)
-print("Create Test Data")
-print("=" * 60)
 
 def get_db_url():
-    """Get database URL from environment variables"""
-    return f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+    return (
+        f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
+        f"@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+    )
+
+print("=" * 60)
+print("C.I.R.A - Create Test Data")
+print("=" * 60)
 
 try:
-    print("\nConnecting to PostgreSQL...")
     engine = create_engine(get_db_url())
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     session = Session()
-    print("OK: Connected to database")
-    
-    print("\nCreating test assessment...")
+    print("OK: Connected to database and reset tables")
+
+    # ----------------------------------------------------------------
+    # ASSESSMENT
+    # ----------------------------------------------------------------
+    assessment_id = f"test-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     assessment = Assessment(
-        id=f"test-assessment-{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        timestamp=datetime.utcnow(),
-        environment='testing',
+        id=assessment_id,
+        environment='test',
+        account_id='828414850095',
         region='us-east-1',
+        timestamp=datetime.utcnow(),
         total_checks=42,
         passed=8,
         failed=34,
@@ -41,251 +51,139 @@ try:
         critical_count=4,
         high_count=14,
         medium_count=16,
-        low_count=0
+        low_count=0,
     )
     session.add(assessment)
     session.flush()
-    print(f"OK: Created assessment {assessment.id}")
-    
-    print("\nCreating test resources...")
-    resources = [
-        Resource(
-            id='test-ec2-001',
-            assessment_id=assessment.id,
-            resource_id='i-test-001',
-            resource_type='ec2',
-            account='123456789012',
-            region='us-east-1',
-            name='Test-Web-Server',
-            state='running',
-            metadata={
-                'instance_type': 't2.micro',
-                'public_ip': '10.0.1.100',
-                'private_ip': '10.0.1.100'
-            }
-        ),
-        Resource(
-            id='test-s3-001',
-            assessment_id=assessment.id,
-            resource_id='test-bucket-001',
-            resource_type='s3',
-            account='123456789012',
-            region='us-east-1',
-            name='Test-Bucket',
-            state='active',
-            metadata={
-                'bucket_name': 'test-bucket-001',
-                'versioning': 'Enabled',
-                'encryption': 'AES256'
-            }
-        ),
-        Resource(
-            id='test-rds-001',
-            assessment_id=assessment.id,
-            resource_id='test-db-instance',
-            resource_type='rds',
-            account='123456789012',
-            region='us-east-1',
-            name='Test-Database',
-            state='available',
-            metadata={
-                'engine': 'mysql',
-                'version': '5.7.33',
-                'encryption': 'enabled'
-            }
-        )
+    print(f"OK: Assessment {assessment_id}")
+
+    # ----------------------------------------------------------------
+    # FINDINGS
+    # ----------------------------------------------------------------
+    findings_data = [
+        ('AWS_IAM_001', 'Root account MFA enabled',       'iam', 'CRITICAL', 'FAIL',  'root-account',    'iam-root',       'Root account does not have MFA enabled',              'Enable MFA on root account via AWS Console',        ['CIS', 'GDPR', 'HIPAA'], 95),
+        ('AWS_IAM_002', 'IAM user MFA enabled',           'iam', 'HIGH',     'FAIL',  'user-alice',      'iam-user',       'IAM user alice does not have MFA enabled',            'Enable MFA for user alice',                         ['CIS', 'HIPAA'],         80),
+        ('AWS_IAM_003', 'Overly permissive IAM policy',   'iam', 'HIGH',     'FAIL',  'AdminPolicy',     'iam-policy',     'Policy AdminPolicy has wildcard (*) permissions',     'Apply least privilege - remove wildcard permissions',['CIS', 'GDPR'],          85),
+        ('AWS_IAM_004', 'Access key rotation',            'iam', 'MEDIUM',   'FAIL',  'user-bob/AKIA123','iam-access-key', 'Access key for user-bob is 120 days old',             'Rotate access key for user-bob',                    ['CIS'],                  60),
+        ('AWS_EC2_001', 'Unrestricted SSH access',        'ec2', 'CRITICAL', 'FAIL',  'sg-0a1b2c3d',    'security-group', 'Security group allows SSH from 0.0.0.0/0',            'Restrict SSH to specific IP ranges',                ['CIS', 'PCI-DSS'],       92),
+        ('AWS_VPC_002', 'VPC Flow Logs enabled',          'vpc', 'MEDIUM',   'FAIL',  'vpc-12345678',    'vpc',            'VPC does not have Flow Logs enabled',                 'Enable VPC Flow Logs for network monitoring',        ['CIS', 'GDPR'],          65),
+        ('AWS_S3_001',  'S3 bucket public access blocked','s3',  'CRITICAL', 'FAIL',  'my-data-bucket',  's3-bucket',      'S3 bucket my-data-bucket allows public access',       'Enable all S3 public access blocks',                ['CIS', 'GDPR', 'HIPAA'], 95),
+        ('AWS_RDS_001', 'RDS database encryption',        'rds', 'HIGH',     'FAIL',  'prod-db-01',      'rds-instance',   'RDS instance prod-db-01 is not encrypted',            'Enable encryption at rest for RDS instance',        ['CIS', 'GDPR', 'HIPAA'], 80),
+        ('AWS_CT_001',  'CloudTrail enabled',             'cloudtrail','INFO','PASS',  'cira-cloudtrail','cloudtrail',     'CloudTrail is logging',                               'N/A',                                               ['CIS'],                  0),
+        ('AWS_LOG_001', 'CloudWatch logs configured',     'logs','MEDIUM',   'FAIL',  'account',         'log-group',      'No CloudWatch log groups configured',                 'Create CloudWatch log groups',                      ['CIS', 'GDPR'],          70),
     ]
-    for resource in resources:
-        session.add(resource)
-    session.flush()
-    print(f"OK: Created {len(resources)} test resources")
-    
-    print("\nCreating test findings...")
-    findings = [
-        Finding(
-            id='finding-001',
-            check_id='AWS_IAM_001',
-            check_title='Root account MFA enabled',
-            assessment_id=assessment.id,
-            service='iam',
-            severity='CRITICAL',
-            status='FAIL',
-            resource_id='root',
-            resource_type='iam-user',
-            region='global',
-            description='Root account does not have MFA enabled',
-            remediation='Enable MFA for root account',
-            frameworks=['CIS', 'PCI-DSS'],
-            threat_score=100
-        ),
-        Finding(
-            id='finding-002',
-            check_id='AWS_EC2_001',
-            check_title='Unrestricted SSH access',
-            assessment_id=assessment.id,
-            service='ec2',
-            severity='HIGH',
-            status='FAIL',
-            resource_id='i-test-001',
-            resource_type='security-group',
+
+    for check_id, check_title, service, severity, status, resource_id, resource_type, desc, remediation, frameworks, threat_score in findings_data:
+        session.add(Finding(
+            id=str(uuid.uuid4()),
+            assessment_id=assessment_id,
+            check_id=check_id,
+            check_title=check_title,
+            service=service,
+            severity=severity,
+            status=status,
+            resource_id=resource_id,
+            resource_type=resource_type,
             region='us-east-1',
-            description='Security group allows SSH (port 22) from 0.0.0.0/0',
-            remediation='Restrict SSH access to specific IPs',
-            frameworks=['CIS', 'PCI-DSS'],
-            threat_score=90
-        ),
-        Finding(
-            id='finding-003',
-            check_id='AWS_S3_001',
-            check_title='S3 bucket public access',
-            assessment_id=assessment.id,
-            service='s3',
-            severity='CRITICAL',
-            status='FAIL',
-            resource_id='test-bucket-001',
-            resource_type='s3-bucket',
-            region='us-east-1',
-            description='S3 bucket is publicly accessible',
-            remediation='Block public access to S3 bucket',
-            frameworks=['CIS', 'GDPR'],
-            threat_score=95
-        ),
-        Finding(
-            id='finding-004',
-            check_id='AWS_RDS_001',
-            check_title='RDS encryption at rest',
-            assessment_id=assessment.id,
-            service='rds',
-            severity='HIGH',
-            status='PASS',
-            resource_id='test-db-instance',
-            resource_type='rds-instance',
-            region='us-east-1',
-            description='RDS instance has encryption at rest enabled',
-            remediation='N/A - Check passed',
-            frameworks=['PCI-DSS', 'HIPAA'],
-            threat_score=0
-        )
-    ]
-    for finding in findings:
-        session.add(finding)
-    session.flush()
-    print(f"OK: Created {len(findings)} test findings")
-    
-    print("\nCreating test log events...")
-    log_events = [
-        LogEvent(
-            id=f'log-{uuid.uuid4()}',
-            timestamp=datetime.utcnow() - timedelta(minutes=10),
-            source='cloudtrail',
-            account='123456789012',
-            region='us-east-1',
-            service='iam',
-            action='CreateUser',
-            status='success',
-            severity='medium',
-            resource_id='test-user',
-            resource_type='iam-user',
-            principal='arn:aws:iam::123456789012:user/admin',
-            principal_type='iam-user',
-            message='CreateUser request for test-user',
-            raw_data={'EventName': 'CreateUser', 'Username': 'test-user'}
-        ),
-        LogEvent(
-            id=f'log-{uuid.uuid4()}',
-            timestamp=datetime.utcnow() - timedelta(minutes=5),
-            source='cloudtrail',
-            account='123456789012',
-            region='us-east-1',
-            service='ec2',
-            action='RunInstances',
-            status='success',
-            severity='low',
-            resource_id='i-test-002',
-            resource_type='ec2-instance',
-            principal='arn:aws:iam::123456789012:user/admin',
-            principal_type='iam-user',
-            message='RunInstances request for i-test-002',
-            raw_data={'EventName': 'RunInstances', 'InstanceId': 'i-test-002'}
-        ),
-        LogEvent(
-            id=f'log-{uuid.uuid4()}',
+            description=desc,
+            remediation=remediation,
+            frameworks=frameworks,
+            threat_score=threat_score,
             timestamp=datetime.utcnow(),
-            source='cloudtrail',
-            account='123456789012',
+        ))
+    print(f"OK: {len(findings_data)} findings")
+
+    # ----------------------------------------------------------------
+    # RESOURCES
+    # ----------------------------------------------------------------
+    resources_data = [
+        ('i-0abc123def456',  'ec2_instances',    'running', {'instance_type': 't3.micro',  'public_ip': '54.1.2.3'}),
+        ('i-0def456abc789',  'ec2_instances',    'stopped', {'instance_type': 't3.small',  'public_ip': None}),
+        ('my-data-bucket',   's3_buckets',       'active',  {'versioning': 'Disabled', 'encryption': 'None'}),
+        ('cira-logs-bucket', 's3_buckets',       'active',  {'versioning': 'Enabled',  'encryption': 'AES256'}),
+        ('prod-db-01',       'rds_databases',    'available',{'engine': 'mysql', 'version': '8.0', 'encrypted': False}),
+        ('AdminRole',        'iam_roles',        'active',  {'arn': 'arn:aws:iam::828414850095:role/AdminRole'}),
+        ('ReadOnlyRole',     'iam_roles',        'active',  {'arn': 'arn:aws:iam::828414850095:role/ReadOnlyRole'}),
+        ('prod-alb-01',      'elb_load_balancers','active', {'scheme': 'internet-facing', 'state': 'active'}),
+    ]
+
+    for rid, rtype, state, metadata in resources_data:
+        session.add(Resource(
+            id=str(uuid.uuid4()),
+            resource_id=rid,
+            resource_type=rtype,
+            account='828414850095',
             region='us-east-1',
-            service='iam',
-            action='GetUser',
-            status='success',
-            severity='info',
-            resource_id='test-user',
-            resource_type='iam-user',
-            principal='arn:aws:iam::123456789012:user/admin',
+            name=rid,
+            state=state,
+            resource_metadata=metadata,
+        ))
+    print(f"OK: {len(resources_data)} resources")
+
+    # ----------------------------------------------------------------
+    # LOG EVENTS
+    # ----------------------------------------------------------------
+    log_entries = [
+        (datetime.utcnow() - timedelta(minutes=5),  'cloudtrail', 'iam', 'create',       'arn:aws:iam::828414850095:user/admin', 'success', 'medium',   'CreateUser - new-employee'),
+        (datetime.utcnow() - timedelta(minutes=12), 'cloudtrail', 'ec2', 'modify',       'arn:aws:iam::828414850095:user/admin', 'success', 'high',     'ModifySecurityGroupIngress - sg-0a1b2c3d'),
+        (datetime.utcnow() - timedelta(minutes=20), 'cloudtrail', 's3',  'policy_change','arn:aws:iam::828414850095:user/devops','success', 'high',     'PutBucketPolicy - my-data-bucket'),
+        (datetime.utcnow() - timedelta(minutes=35), 'cloudtrail', 'iam', 'login',        'root',                                'success', 'critical', 'RootConsoleLogin'),
+        (datetime.utcnow() - timedelta(minutes=45), 'cloudtrail', 'iam', 'access_denied','arn:aws:iam::828414850095:user/intern','failure', 'critical', 'UnauthorizedOperation - GetSecretValue'),
+        (datetime.utcnow() - timedelta(minutes=58), 'cloudtrail', 'rds', 'modify',       'arn:aws:iam::828414850095:user/admin', 'success', 'high',     'ModifyDBInstance - prod-db-01'),
+        (datetime.utcnow() - timedelta(hours=1),    'cloudtrail', 'ec2', 'create',       'arn:aws:iam::828414850095:user/admin', 'success', 'medium',   'RunInstances - i-0abc123def456'),
+        (datetime.utcnow() - timedelta(hours=2),    'cloudtrail', 'iam', 'attach',       'arn:aws:iam::828414850095:user/admin', 'success', 'high',     'AttachUserPolicy - AdministratorAccess'),
+    ]
+
+    for ts, source, service, action, principal, status, severity, message in log_entries:
+        session.add(LogEvent(
+            id=str(uuid.uuid4()),
+            timestamp=ts,
+            source=source,
+            account='828414850095',
+            region='us-east-1',
+            service=service,
+            action=action,
+            principal=principal,
             principal_type='iam-user',
-            message='GetUser request for test-user',
-            raw_data={'EventName': 'GetUser', 'UserName': 'test-user'}
-        )
+            status=status,
+            severity=severity,
+            resource_id='unknown',
+            resource_type='unknown',
+            message=message,
+            event_details={'raw': message},
+        ))
+    print(f"OK: {len(log_entries)} log events")
+
+    # ----------------------------------------------------------------
+    # COMPLIANCE
+    # ----------------------------------------------------------------
+    compliance_data = [
+        ('CIS',     42, 8,  34, 19.0),
+        ('GDPR',    25, 7,  18, 28.0),
+        ('HIPAA',   30, 5,  25, 16.7),
+        ('PCI-DSS', 20, 4,  16, 20.0),
     ]
-    for log_event in log_events:
-        session.add(log_event)
-    session.flush()
-    print(f"OK: Created {len(log_events)} test log events")
-    
-    print("\nCreating compliance status...")
-    compliance_statuses = [
-        ComplianceStatus(
-            id='compliance-cis-001',
-            assessment_id=assessment.id,
-            framework='CIS',
-            total_controls=42,
-            passed=8,
-            failed=34,
-            compliance_percentage=19.0
-        ),
-        ComplianceStatus(
-            id='compliance-pci-001',
-            assessment_id=assessment.id,
-            framework='PCI-DSS',
-            total_controls=30,
-            passed=5,
-            failed=25,
-            compliance_percentage=16.7
-        ),
-        ComplianceStatus(
-            id='compliance-gdpr-001',
-            assessment_id=assessment.id,
-            framework='GDPR',
-            total_controls=25,
-            passed=7,
-            failed=18,
-            compliance_percentage=28.0
-        )
-    ]
-    for status in compliance_statuses:
-        session.add(status)
-    session.flush()
-    print(f"OK: Created {len(compliance_statuses)} compliance statuses")
-    
+
+    for fw, total, passed, failed, pct in compliance_data:
+        session.add(ComplianceStatus(
+            id=str(uuid.uuid4()),
+            assessment_id=assessment_id,
+            framework=fw,
+            total_controls=total,
+            passed=passed,
+            failed=failed,
+            compliance_percentage=pct,
+        ))
+    print(f"OK: {len(compliance_data)} compliance frameworks")
+
     session.commit()
-    print("\nOK: Test data created successfully!")
-    print("\nSummary:")
-    print(f"   - Assessments: 1")
-    print(f"   - Resources: {len(resources)}")
-    print(f"   - Findings: {len(findings)}")
-    print(f"   - Log Events: {len(log_events)}")
-    print(f"   - Compliance Statuses: {len(compliance_statuses)}")
-    
+    print("\nOK: All test data saved to DB!")
     print("\nNext steps:")
-    print("   1. Run: python api.py")
-    print("   2. Visit: http://localhost:5000")
-    print("   3. Check database with check_data.py")
-    
+    print("  1. python api.py")
+    print("  2. Open http://localhost:5000")
+
 except Exception as e:
     print(f"\nFAIL: {e}")
-    print("\nTroubleshooting:")
-    print("   - Check PostgreSQL is running")
-    print("   - Run init_database.py first")
-    print("   - Verify .env has correct DB credentials")
     if 'session' in locals():
         session.rollback()
 finally:

@@ -2,53 +2,159 @@
 """
 C.I.R.A Flask API
 REST endpoints for AWS security assessment and log collection
-Serves Jinja2 dashboard template
+Reads from PostgreSQL DB (falls back to JSON if DB unavailable)
 """
 
-from flask import Flask, jsonify, request, render_template
-from flask_cors import CORS
-from datetime import datetime, timezone
 import os
 import json
 import glob
+from datetime import datetime, timezone
+
+from flask import Flask, jsonify, request, render_template
+from flask_cors import CORS
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, desc
+from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
 
-app = Flask(__name__, 
+from backend.api.models import Base, Assessment, Finding, Resource, LogEvent, ComplianceStatus
+
+app = Flask(
+    __name__,
     template_folder=os.path.join(os.path.dirname(__file__), 'frontend/templates'),
-    static_folder=os.path.join(os.path.dirname(__file__), 'frontend/static'))
+    static_folder=os.path.join(os.path.dirname(__file__), 'frontend/static')
+)
 CORS(app)
 
 # ============================================================================
-# DATA LOADING FUNCTIONS
+# DATABASE
+# ============================================================================
+
+def get_db_session():
+    url = (
+        f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
+        f"@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+    )
+    engine = create_engine(url)
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)()
+
+
+# ============================================================================
+# JSON FALLBACK (used only if DB has no data)
 # ============================================================================
 
 def get_latest_scan_data():
-    """Load the latest assessment report from JSON file"""
-    assessment_files = sorted(glob.glob('cira_assessment_*.json'), reverse=True)
-    if not assessment_files:
+    files = sorted(glob.glob('cira_assessment_*.json'), reverse=True)
+    if not files:
         return None
-    with open(assessment_files[0], 'r') as f:
+    with open(files[0]) as f:
         return json.load(f)
 
 def get_latest_logs_data():
-    """Load the latest logs report from JSON file"""
-    log_files = sorted(glob.glob('logs_*.json'), reverse=True)
-    if not log_files:
+    files = sorted(glob.glob('logs_*.json'), reverse=True)
+    if not files:
         return None
-    with open(log_files[0], 'r') as f:
+    with open(files[0]) as f:
         return json.load(f)
 
+
 # ============================================================================
-# FRONTEND ROUTES
+# HELPERS
+# ============================================================================
+
+def assessment_to_dict(a: Assessment) -> dict:
+    return {
+        'id': a.id,
+        'environment': a.environment,
+        'account_id': a.account_id,
+        'region': a.region,
+        'timestamp': a.timestamp.isoformat() if a.timestamp else None,
+        'summary': {
+            'total_checks': a.total_checks,
+            'passed': a.passed,
+            'failed': a.failed,
+            'pass_rate': a.pass_rate,
+            'severity': {
+                'critical': a.critical_count,
+                'high': a.high_count,
+                'medium': a.medium_count,
+                'low': a.low_count,
+            }
+        }
+    }
+
+def finding_to_dict(f: Finding) -> dict:
+    return {
+        'id': f.id,
+        'assessment_id': f.assessment_id,
+        'check_id': f.check_id,
+        'check_title': f.check_title,
+        'service': f.service,
+        'severity': f.severity,
+        'status': f.status,
+        'resource_id': f.resource_id,
+        'resource_type': f.resource_type,
+        'region': f.region,
+        'description': f.description,
+        'remediation': f.remediation,
+        'frameworks': f.frameworks or [],
+        'threat_score': f.threat_score,
+        'timestamp': f.timestamp.isoformat() if f.timestamp else None,
+    }
+
+def log_to_dict(l: LogEvent) -> dict:
+    return {
+        'id': l.id,
+        'timestamp': l.timestamp.isoformat() if l.timestamp else None,
+        'source': l.source,
+        'account': l.account,
+        'region': l.region,
+        'service': l.service,
+        'action': l.action,
+        'principal': l.principal,
+        'principal_type': l.principal_type,
+        'status': l.status,
+        'severity': l.severity,
+        'resource_id': l.resource_id,
+        'resource_type': l.resource_type,
+        'message': l.message,
+    }
+
+
+# ============================================================================
+# DASHBOARD
 # ============================================================================
 
 @app.route('/')
 def dashboard():
-    """Main dashboard - served via Jinja template"""
-    data = get_latest_scan_data()
+    """Main dashboard - tries DB first, falls back to JSON"""
+    data = None
+    try:
+        session = get_db_session()
+        assessment = session.query(Assessment).order_by(desc(Assessment.timestamp)).first()
+        if assessment:
+            findings = session.query(Finding).filter_by(assessment_id=assessment.id).all()
+            resources_raw = session.query(Resource).all()
+
+            resources = {}
+            for r in resources_raw:
+                key = r.resource_type + 's'
+                resources.setdefault(key, []).append(r.resource_metadata or {'id': r.resource_id})
+
+            data = {
+                **assessment_to_dict(assessment),
+                'findings': [finding_to_dict(f) for f in findings],
+                'resources': resources,
+            }
+        session.close()
+    except Exception as e:
+        print(f"DB unavailable, falling back to JSON: {e}")
+        data = get_latest_scan_data()
+
     return render_template('dashboard.html', data=data)
+
 
 # ============================================================================
 # API ROOT
@@ -56,326 +162,277 @@ def dashboard():
 
 @app.route('/api/')
 def api_root():
-    """API root - list available endpoints"""
     return jsonify({
         'service': 'C.I.R.A - AWS Cloud Security Assessment',
-        'version': '1.0.0',
-        'frontend': '/',
+        'version': '2.0.0',
         'endpoints': {
-            '/': 'Main dashboard (Jinja template)',
-            '/api/health': 'API health check',
-            '/api/assessments/latest': 'Latest assessment report',
-            '/api/assessments/summary': 'Assessment summary only',
-            '/api/findings': 'All findings with optional filters',
-            '/api/findings/<id>': 'Specific finding details',
-            '/api/resources': 'All discovered resources',
-            '/api/resources/<type>': 'Resources by type',
-            '/api/compliance/<framework>': 'Compliance framework status',
-            '/api/logs': 'All logs with optional filters (Phase 2)',
-            '/api/logs/stats': 'Log statistics summary (Phase 2)'
+            '/': 'Dashboard',
+            '/api/health': 'Health check',
+            '/api/assessments/latest': 'Latest assessment',
+            '/api/assessments/summary': 'Assessment summary',
+            '/api/findings': 'Findings (filters: severity, service, status)',
+            '/api/findings/<id>': 'Finding by check_id',
+            '/api/resources': 'All resources',
+            '/api/compliance/<framework>': 'Compliance status (CIS, GDPR, HIPAA, PCI-DSS)',
+            '/api/logs': 'Logs (filters: source, severity, service, status, limit, offset)',
+            '/api/logs/stats': 'Log statistics',
         }
     }), 200
 
+
 # ============================================================================
-# HEALTH CHECK
+# HEALTH
 # ============================================================================
 
-@app.route('/api/health', methods=['GET'])
+@app.route('/api/health')
 def health_check():
-    """API health check endpoint"""
+    db_ok = False
+    try:
+        session = get_db_session()
+        session.execute(__import__('sqlalchemy').text('SELECT 1'))
+        db_ok = True
+        session.close()
+    except Exception:
+        pass
+
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'service': 'C.I.R.A Assessment API'
+        'db_connected': db_ok,
     }), 200
 
+
 # ============================================================================
-# ASSESSMENT ENDPOINTS
+# ASSESSMENTS
 # ============================================================================
 
-@app.route('/api/assessments/latest', methods=['GET'])
+@app.route('/api/assessments/latest')
 def get_latest_assessment():
-    """GET /api/assessments/latest - Returns full latest assessment data"""
-    data = get_latest_scan_data()
-    if not data:
-        return jsonify({'error': 'No assessment data available'}), 404
-    return jsonify(data), 200
+    try:
+        session = get_db_session()
+        assessment = session.query(Assessment).order_by(desc(Assessment.timestamp)).first()
+        if not assessment:
+            session.close()
+            return jsonify({'error': 'No assessment data available'}), 404
 
-@app.route('/api/assessments/summary', methods=['GET'])
+        findings = session.query(Finding).filter_by(assessment_id=assessment.id).all()
+        resources_raw = session.query(Resource).all()
+        resources = {}
+        for r in resources_raw:
+            resources.setdefault(r.resource_type + 's', []).append(r.resource_metadata or {})
+
+        result = {
+            **assessment_to_dict(assessment),
+            'findings': [finding_to_dict(f) for f in findings],
+            'resources': resources,
+        }
+        session.close()
+        return jsonify(result), 200
+    except Exception as e:
+        data = get_latest_scan_data()
+        if not data:
+            return jsonify({'error': str(e)}), 500
+        return jsonify(data), 200
+
+
+@app.route('/api/assessments/summary')
 def get_assessment_summary():
-    """GET /api/assessments/summary - Returns summary information only"""
-    data = get_latest_scan_data()
-    if not data:
-        return jsonify({'error': 'No assessment data available'}), 404
-    return jsonify({
-        'summary': data.get('summary'),
-        'timestamp': data.get('timestamp'),
-        'environment': data.get('environment')
-    }), 200
+    try:
+        session = get_db_session()
+        assessment = session.query(Assessment).order_by(desc(Assessment.timestamp)).first()
+        session.close()
+        if not assessment:
+            return jsonify({'error': 'No data'}), 404
+        return jsonify(assessment_to_dict(assessment)), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 # ============================================================================
-# FINDINGS ENDPOINTS
+# FINDINGS
 # ============================================================================
 
-@app.route('/api/findings', methods=['GET'])
+@app.route('/api/findings')
 def list_findings():
-    """GET /api/findings - Returns findings with optional filters
-    
-    Query Parameters:
-        severity: Filter by severity (CRITICAL, HIGH, MEDIUM, LOW)
-        service: Filter by service (iam, ec2, s3, etc.)
-        status: Filter by status (PASS, FAIL)
-    """
-    data = get_latest_scan_data()
-    if not data:
-        return jsonify({'total': 0, 'findings': []}), 200
-    
-    severity = request.args.get('severity', None)
-    service = request.args.get('service', None)
-    status = request.args.get('status', None)
-    findings = data.get('findings', [])
-    
-    if severity:
-        findings = [f for f in findings if f['severity'] == severity]
-    if service:
-        findings = [f for f in findings if f['service'] == service]
-    if status:
-        findings = [f for f in findings if f['status'] == status]
-    
-    findings.sort(key=lambda x: x.get('threat_score', 0), reverse=True)
-    
-    return jsonify({
-        'total': len(findings),
-        'findings': findings
-    }), 200
+    severity = request.args.get('severity')
+    service  = request.args.get('service')
+    status   = request.args.get('status')
 
-@app.route('/api/findings/<finding_id>', methods=['GET'])
+    try:
+        session = get_db_session()
+        q = session.query(Finding)
+        if severity:
+            q = q.filter(Finding.severity == severity.upper())
+        if service:
+            q = q.filter(Finding.service == service.lower())
+        if status:
+            q = q.filter(Finding.status == status.upper())
+        findings = q.order_by(desc(Finding.threat_score)).all()
+        session.close()
+        return jsonify({'total': len(findings), 'findings': [finding_to_dict(f) for f in findings]}), 200
+    except Exception as e:
+        data = get_latest_scan_data()
+        if not data:
+            return jsonify({'total': 0, 'findings': []}), 200
+        findings = data.get('findings', [])
+        if severity:
+            findings = [f for f in findings if f['severity'] == severity.upper()]
+        if service:
+            findings = [f for f in findings if f['service'] == service.lower()]
+        if status:
+            findings = [f for f in findings if f['status'] == status.upper()]
+        findings.sort(key=lambda x: x.get('threat_score', 0), reverse=True)
+        return jsonify({'total': len(findings), 'findings': findings}), 200
+
+
+@app.route('/api/findings/<finding_id>')
 def get_finding(finding_id):
-    """GET /api/findings/<id> - Returns specific finding details"""
-    data = get_latest_scan_data()
-    if not data:
-        return jsonify({'error': 'No finding data available'}), 404
-    
-    findings = data.get('findings', [])
-    finding = next((f for f in findings if f['check_id'] == finding_id), None)
-    
-    if not finding:
-        return jsonify({'error': f'Finding {finding_id} not found'}), 404
-    
-    return jsonify(finding), 200
+    try:
+        session = get_db_session()
+        finding = session.query(Finding).filter_by(check_id=finding_id).first()
+        session.close()
+        if not finding:
+            return jsonify({'error': f'Finding {finding_id} not found'}), 404
+        return jsonify(finding_to_dict(finding)), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 # ============================================================================
-# RESOURCES ENDPOINTS
+# RESOURCES
 # ============================================================================
 
-@app.route('/api/resources', methods=['GET'])
+@app.route('/api/resources')
 def get_resources():
-    """GET /api/resources - Returns all discovered resource types"""
-    data = get_latest_scan_data()
-    if not data:
+    try:
+        session = get_db_session()
+        resources_raw = session.query(Resource).all()
+        session.close()
+        resources = {}
+        for r in resources_raw:
+            resources.setdefault(r.resource_type + 's', []).append(r.resource_metadata or {'id': r.resource_id})
+        return jsonify({'total_types': len(resources), 'resources': resources}), 200
+    except Exception as e:
         return jsonify({'resources': {}}), 200
-    
-    resources = data.get('resources', {})
-    
-    return jsonify({
-        'total_types': len(resources),
-        'resources': resources
-    }), 200
 
-@app.route('/api/resources/<resource_type>', methods=['GET'])
+
+@app.route('/api/resources/<resource_type>')
 def get_resources_by_type(resource_type):
-    """GET /api/resources/<type> - Returns resources of specific type"""
-    data = get_latest_scan_data()
-    if not data:
+    try:
+        session = get_db_session()
+        resources = session.query(Resource).filter_by(resource_type=resource_type).all()
+        session.close()
+        return jsonify({
+            'type': resource_type,
+            'count': len(resources),
+            'resources': [r.resource_metadata or {'id': r.resource_id} for r in resources],
+        }), 200
+    except Exception as e:
         return jsonify({'resources': []}), 200
-    
-    resources = data.get('resources', {})
-    
-    if resource_type not in resources:
-        return jsonify({'error': f'Resource type {resource_type} not found'}), 404
-    
-    return jsonify({
-        'type': resource_type,
-        'count': len(resources[resource_type]),
-        'resources': resources[resource_type]
-    }), 200
+
 
 # ============================================================================
-# COMPLIANCE ENDPOINTS
+# COMPLIANCE
 # ============================================================================
 
-@app.route('/api/compliance/<framework>', methods=['GET'])
+@app.route('/api/compliance/<framework>')
 def get_compliance(framework):
-    """GET /api/compliance/<framework> - Returns compliance status
-    
-    Frameworks: CIS, GDPR, HIPAA, PCI-DSS
-    """
-    data = get_latest_scan_data()
-    if not data:
-        return jsonify({'compliance': {}}), 200
-    
-    findings = data.get('findings', [])
-    framework_findings = [f for f in findings if framework in f.get('frameworks', [])]
-    
-    if not framework_findings:
+    try:
+        session = get_db_session()
+        compliance = session.query(ComplianceStatus).filter_by(framework=framework.upper()).order_by(desc(ComplianceStatus.timestamp)).first()
+        session.close()
+
+        if not compliance:
+            return jsonify({'framework': framework, 'status': 'not_found'}), 200
+
         return jsonify({
-            'framework': framework,
-            'status': 'not_found',
-            'message': f'No findings for {framework} framework'
+            'framework': compliance.framework,
+            'total_controls': compliance.total_controls,
+            'passed': compliance.passed,
+            'failed': compliance.failed,
+            'compliance_percentage': compliance.compliance_percentage,
         }), 200
-    
-    passed = len([f for f in framework_findings if f['status'] == 'PASS'])
-    failed = len([f for f in framework_findings if f['status'] == 'FAIL'])
-    total = passed + failed
-    compliance_percentage = (passed / total * 100) if total > 0 else 0
-    
-    return jsonify({
-        'framework': framework,
-        'total_controls': total,
-        'passed': passed,
-        'failed': failed,
-        'compliance_percentage': round(compliance_percentage, 1),
-        'findings': framework_findings
-    }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 # ============================================================================
-# LOG ENDPOINTS
+# LOGS
 # ============================================================================
 
-@app.route('/api/logs', methods=['GET'])
+@app.route('/api/logs')
 def get_logs():
-    """GET /api/logs - Returns logs with optional filters
-    
-    Query Parameters:
-        source: Filter by source (cloudtrail, vpc_flow, cloudwatch)
-        severity: Filter by severity (critical, high, medium, low, info)
-        service: Filter by service (iam, ec2, s3, etc.)
-        status: Filter by status (success, failure)
-        limit: Maximum records to return (default: 100)
-        offset: Pagination offset (default: 0)
-    
-    Example: /api/logs?source=cloudtrail&severity=critical&limit=50
-    """
-    data = get_latest_logs_data()
-    if not data:
-        return jsonify({
-            'total': 0,
-            'logs': [],
-            'message': 'No logs available. Run log collector first.'
-        }), 200
-    
-    source = request.args.get('source', None)
-    severity = request.args.get('severity', None)
-    service = request.args.get('service', None)
-    status = request.args.get('status', None)
-    limit = int(request.args.get('limit', 100))
-    offset = int(request.args.get('offset', 0))
-    
-    logs = data.get('records', [])
-    
-    if source:
-        logs = [l for l in logs if l.get('source') == source]
-    if severity:
-        logs = [l for l in logs if l.get('severity') == severity]
-    if service:
-        logs = [l for l in logs if l.get('service') == service]
-    if status:
-        logs = [l for l in logs if l.get('status') == status]
-    
-    logs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
-    
-    total = len(logs)
-    paginated_logs = logs[offset:offset + limit]
-    
-    return jsonify({
-        'total': total,
-        'returned': len(paginated_logs),
-        'offset': offset,
-        'limit': limit,
-        'logs': paginated_logs
-    }), 200
+    source   = request.args.get('source')
+    severity = request.args.get('severity')
+    service  = request.args.get('service')
+    status   = request.args.get('status')
+    limit    = int(request.args.get('limit', 100))
+    offset   = int(request.args.get('offset', 0))
 
-@app.route('/api/logs/stats', methods=['GET'])
-def get_logs_stats():
-    """GET /api/logs/stats - Returns log statistics and summaries"""
-    data = get_latest_logs_data()
-    if not data:
+    try:
+        session = get_db_session()
+        q = session.query(LogEvent).order_by(desc(LogEvent.timestamp))
+        if source:
+            q = q.filter(LogEvent.source == source)
+        if severity:
+            q = q.filter(LogEvent.severity == severity)
+        if service:
+            q = q.filter(LogEvent.service == service)
+        if status:
+            q = q.filter(LogEvent.status == status)
+
+        total = q.count()
+        logs = q.offset(offset).limit(limit).all()
+        session.close()
         return jsonify({
-            'total': 0,
+            'total': total,
+            'returned': len(logs),
+            'offset': offset,
+            'limit': limit,
+            'logs': [log_to_dict(l) for l in logs],
+        }), 200
+    except Exception as e:
+        data = get_latest_logs_data()
+        if not data:
+            return jsonify({'total': 0, 'logs': [], 'message': 'No logs available'}), 200
+        logs = data.get('records', [])
+        return jsonify({'total': len(logs), 'returned': len(logs), 'logs': logs}), 200
+
+
+@app.route('/api/logs/stats')
+def get_logs_stats():
+    try:
+        session = get_db_session()
+        from sqlalchemy import func
+        stats = {
+            'total': session.query(LogEvent).count(),
             'by_source': {},
             'by_service': {},
             'by_severity': {},
             'by_status': {},
-            'timestamp': None
-        }), 200
-    
-    logs = data.get('records', [])
-    
-    stats = {
-        'total': len(logs),
-        'timestamp': data.get('timestamp'),
-        'source_file': data.get('source'),
-        'by_source': {},
-        'by_service': {},
-        'by_severity': {},
-        'by_status': {}
-    }
-    
-    for log in logs:
-        source = log.get('source', 'unknown')
-        service = log.get('service', 'unknown')
-        severity = log.get('severity', 'unknown')
-        status = log.get('status', 'unknown')
-        
-        stats['by_source'][source] = stats['by_source'].get(source, 0) + 1
-        stats['by_service'][service] = stats['by_service'].get(service, 0) + 1
-        stats['by_severity'][severity] = stats['by_severity'].get(severity, 0) + 1
-        stats['by_status'][status] = stats['by_status'].get(status, 0) + 1
-    
-    stats['by_source'] = dict(sorted(stats['by_source'].items(), key=lambda x: x[1], reverse=True))
-    stats['by_service'] = dict(sorted(stats['by_service'].items(), key=lambda x: x[1], reverse=True))
-    stats['by_severity'] = dict(sorted(stats['by_severity'].items(), key=lambda x: x[1], reverse=True))
-    stats['by_status'] = dict(sorted(stats['by_status'].items(), key=lambda x: x[1], reverse=True))
-    
-    return jsonify(stats), 200
+        }
+        for col, key in [(LogEvent.source, 'by_source'), (LogEvent.service, 'by_service'),
+                         (LogEvent.severity, 'by_severity'), (LogEvent.status, 'by_status')]:
+            rows = session.query(col, func.count(col)).group_by(col).all()
+            stats[key] = {str(r[0]): r[1] for r in rows if r[0]}
+        session.close()
+        return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({'total': 0, 'by_source': {}, 'by_service': {}, 'by_severity': {}, 'by_status': {}}), 200
+
 
 # ============================================================================
-# MAIN ENTRY POINT
+# MAIN
 # ============================================================================
 
 if __name__ == '__main__':
-    print("\n" + "=" * 80)
-    print("C.I.R.A AWS Assessment API + Dashboard")
-    print("=" * 80)
-    print("\nApplication Running on: http://localhost:5000")
-    print("\nFrontend:")
-    print("   Dashboard: http://localhost:5000/ (Jinja template)")
-    print("\nAPI Endpoints:")
-    print("   GET /api/                              List all endpoints")
-    print("   GET /api/health                        API health check")
-    print("   GET /api/assessments/latest            Latest assessment report")
-    print("   GET /api/assessments/summary           Assessment summary only")
-    print("   GET /api/findings                      All findings with filters")
-    print("   GET /api/findings/<id>                 Specific finding details")
-    print("   GET /api/resources                     All resources")
-    print("   GET /api/resources/<type>              Resources by type")
-    print("   GET /api/compliance/<framework>        Compliance status (CIS, GDPR, HIPAA, PCI-DSS)")
-    print("   GET /api/logs                          All logs with filters (Phase 2)")
-    print("   GET /api/logs/stats                    Log statistics (Phase 2)")
-    print("\nQuery Parameters for /api/findings:")
-    print("   ?severity=CRITICAL")
-    print("   ?service=iam")
-    print("   ?status=FAIL")
-    print("\nQuery Parameters for /api/logs:")
-    print("   ?source=cloudtrail")
-    print("   ?severity=critical")
-    print("   ?service=iam")
-    print("   ?status=success")
-    print("   ?limit=50&offset=0")
-    print("\nDocumentation:")
-    print("   Full API documentation at: http://localhost:5000/api/")
-    print("\n" + "=" * 80 + "\n")
-    
+    print("\n" + "="*80)
+    print("C.I.R.A AWS Assessment API + Dashboard  (DB-backed)")
+    print("="*80)
+    print(f"\n  Dashboard : http://localhost:5000/")
+    print(f"  API root  : http://localhost:5000/api/")
+    print(f"  Health    : http://localhost:5000/api/health")
+    print("\n" + "="*80 + "\n")
     app.run(
         host='0.0.0.0',
         port=int(os.getenv('API_PORT', 5000)),
