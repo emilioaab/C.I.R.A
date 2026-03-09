@@ -3,6 +3,7 @@
 .env.local
 .env.*.local
 *.key
+environments/*.env
 
 # AWS Credentials (NEVER commit these!)
 AWS_SHIT.txt

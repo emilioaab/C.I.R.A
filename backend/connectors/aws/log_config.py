@@ -1,6 +1,7 @@
 """
 C.I.R.A Log Configuration
 Centralized config for log collection sources, lookback windows, severity mappings
+Supports multi-environment (prod/test) within a single AWS account
 """
 
 import os
@@ -10,13 +11,55 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def load_environment(env_name: str = None):
+    """
+    Load environment-specific config file.
+    env_name: 'prod', 'test', or None (uses CIRA_ENV env var, defaults to 'prod')
+    Loads from environments/<env_name>.env
+    """
+    env_name = env_name or os.getenv('CIRA_ENV', 'prod')
+    env_file = os.path.join(
+        os.path.dirname(__file__), '../../../../environments', f'{env_name}.env'
+    )
+    env_file = os.path.normpath(env_file)
+    if os.path.exists(env_file):
+        load_dotenv(env_file, override=True)
+        return env_name
+    return env_name
+
 # ============================================================================
 # LOG COLLECTION SETTINGS
 # ============================================================================
 
 class LogConfig:
-    """Centralized log configuration"""
-    
+    """Centralized log configuration - supports prod/test environments"""
+
+    # ========================================================================
+    # ENVIRONMENT
+    # ========================================================================
+
+    @classmethod
+    def get_environment(cls) -> str:
+        return os.getenv('ENVIRONMENT_NAME', os.getenv('CIRA_ENV', 'prod'))
+
+    @classmethod
+    def get_env_tag_filter(cls) -> Dict[str, str]:
+        """Return the AWS tag filter for the current environment"""
+        return {
+            'key': os.getenv('ENV_TAG_KEY', 'Environment'),
+            'value': os.getenv('ENV_TAG_VALUE', cls.get_environment())
+        }
+
+    @classmethod
+    def get_vpc_flow_log_group(cls) -> str:
+        """Return VPC Flow Logs CloudWatch group for this environment"""
+        return os.getenv('VPC_FLOW_LOG_GROUP', '/aws/vpc/flowlogs')
+
+    @classmethod
+    def is_guardduty_enabled(cls) -> bool:
+        return os.getenv('GUARDDUTY_ENABLED', 'false').lower() == 'true'
+
     # ========================================================================
     # ENABLED SOURCES - Which log sources to collect from (MVP)
     # ========================================================================
@@ -252,8 +295,8 @@ class LogConfig:
             'dynamodb.amazonaws.com': 'dynamodb',
             'elasticache.amazonaws.com': 'elasticache',
             
-            # Network
-            'ec2.amazonaws.com': 'vpc',  # VPC is part of EC2
+            # Network (note: ec2.amazonaws.com is already mapped to 'ec2' above)
+            'vpc.amazonaws.com': 'vpc',
             'route53.amazonaws.com': 'route53',
             'cloudfront.amazonaws.com': 'cloudfront',
             
