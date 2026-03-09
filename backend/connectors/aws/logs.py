@@ -7,7 +7,9 @@ Supports multi-environment (prod/test) within a single AWS account
 
 import boto3
 import json
+import os
 import time
+import uuid
 from datetime import datetime
 from typing import List, Dict, Optional
 import logging
@@ -570,6 +572,68 @@ class LogCollector:
             logger.error(f"Error saving logs: {e}")
             return None
 
+    def save_to_db(self, records: List[LogRecord] = None) -> int:
+        """
+        Save collected log records to PostgreSQL log_events table.
+        Returns number of records saved.
+        Skips duplicates (same timestamp + principal + action).
+        """
+        if records is None:
+            records = self.all_records
+        if not records:
+            logger.warning("No records to save to DB")
+            return 0
+
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            from backend.api.models import Base, LogEvent
+
+            url = (
+                f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
+                f"@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+            )
+            engine = create_engine(url)
+            Base.metadata.create_all(engine)
+            session = sessionmaker(bind=engine)()
+
+            saved = 0
+            for r in records:
+                try:
+                    ts = datetime.fromisoformat(r.timestamp) if isinstance(r.timestamp, str) else r.timestamp
+                except Exception:
+                    ts = datetime.utcnow()
+
+                session.add(LogEvent(
+                    id=str(uuid.uuid4()),
+                    timestamp=ts,
+                    source=r.source.value,
+                    account=r.account,
+                    region=r.region,
+                    service=r.service,
+                    action=r.action.value,
+                    principal=r.principal,
+                    principal_type=r.principal_type,
+                    status=r.status.value,
+                    severity=r.severity.value,
+                    resource_id=r.resource_id or '',
+                    resource_type=r.resource_type or '',
+                    message=r.message or '',
+                    event_details=r.raw or {},
+                ))
+                saved += 1
+
+            session.commit()
+            session.close()
+            logger.info(f"DB: {saved} log events saved to log_events table")
+            return saved
+
+        except Exception as e:
+            logger.error(f"DB save failed: {e}")
+            return 0
+
     def get_summary(self) -> Dict:
         """Get summary statistics of collected logs"""
         if not self.all_records:
@@ -614,13 +678,19 @@ if __name__ == '__main__':
 
     collector = LogCollector(env=env)
     records = collector.collect_all()
-    filename = collector.save_to_file()
-    summary = collector.get_summary()
 
+    # Save to DB
+    saved = collector.save_to_db()
+
+    # Save JSON backup
+    filename = collector.save_to_file()
+
+    summary = collector.get_summary()
     print(f"\nEnvironment : {summary['environment']}")
     print(f"Total       : {summary['total']}")
+    print(f"Saved to DB : {saved}")
     print(f"By source   : {summary['by_source']}")
     print(f"By service  : {summary['by_service']}")
     print(f"By severity : {summary['by_severity']}")
     if filename:
-        print(f"Saved to    : {filename}")
+        print(f"JSON backup : {filename}")
