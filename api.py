@@ -19,6 +19,7 @@ from sqlalchemy.orm import sessionmaker
 load_dotenv()
 
 from backend.api.models import Base, Assessment, Finding, Resource, LogEvent, ComplianceStatus
+from backend.api.routes import ir_bp
 
 app = Flask(
     __name__,
@@ -26,6 +27,7 @@ app = Flask(
     static_folder=os.path.join(os.path.dirname(__file__), 'frontend/static')
 )
 CORS(app)
+app.register_blueprint(ir_bp)
 
 # ============================================================================
 # DATABASE
@@ -176,6 +178,11 @@ def api_root():
             '/api/compliance/<framework>': 'Compliance status (CIS, GDPR, HIPAA, PCI-DSS)',
             '/api/logs': 'Logs (filters: source, severity, service, status, limit, offset)',
             '/api/logs/stats': 'Log statistics',
+            '/api/ir/status': 'Velociraptor connection status (Phase 3)',
+            '/api/ir/deploy/<instance_id>': 'Deploy Velociraptor agent on EC2 instance',
+            '/api/ir/hunt/<instance_id>': 'Run forensic hunt (quick/full/network/processes)',
+            '/api/ir/results/<instance_id>': 'Get collected forensic artifacts',
+            '/api/ir/incidents': 'List all IR incidents',
         }
     }), 200
 
