@@ -76,26 +76,15 @@ class AWSAssessment(CloudConnector):
     def assess_iam(self) -> List[Finding]:
         """Assess IAM configuration"""
         print("🔍 Assessing IAM...")
-        
-        findings = []
-        
+        start = len(self.findings)
         try:
-            # Check root account MFA
-            findings.extend(self._check_root_mfa())
-            
-            # Check IAM users
-            findings.extend(self._check_iam_users())
-            
-            # Check IAM policies
-            findings.extend(self._check_iam_policies())
-            
-            # Check access keys
-            findings.extend(self._check_access_keys())
-            
+            self._check_root_mfa()
+            self._check_iam_users()
+            self._check_iam_policies()
+            self._check_access_keys()
         except Exception as e:
             print(f"Error in IAM assessment: {e}")
-        
-        return findings
+        return self.findings[start:]
     
     def _check_root_mfa(self) -> List[Finding]:
         """AWS_IAM_001: Root account MFA"""
@@ -265,21 +254,14 @@ class AWSAssessment(CloudConnector):
     def assess_network(self) -> List[Finding]:
         """Assess network security"""
         print("🔍 Assessing Network...")
-        
+        start = len(self.findings)
         try:
-            # Check security groups
             self._check_security_groups()
-            
-            # Check NACLs
             self._check_nacls()
-            
-            # Check VPC Flow Logs
             self._check_vpc_flow_logs()
-            
         except Exception as e:
             print(f"Error in network assessment: {e}")
-        
-        return self.findings
+        return self.findings[start:]
     
     def _check_security_groups(self) -> List[Finding]:
         """AWS_EC2_001: Unrestricted access in security groups"""
@@ -373,18 +355,13 @@ class AWSAssessment(CloudConnector):
     def assess_storage(self) -> List[Finding]:
         """Assess storage security"""
         print("🔍 Assessing Storage...")
-        
+        start = len(self.findings)
         try:
-            # Check S3 buckets
             self._check_s3_buckets()
-            
-            # Check RDS databases
             self._check_rds_databases()
-            
         except Exception as e:
             print(f"Error in storage assessment: {e}")
-        
-        return self.findings
+        return self.findings[start:]
     
     def _check_s3_buckets(self) -> List[Finding]:
         """AWS_S3_001: S3 bucket public access"""
@@ -582,18 +559,13 @@ class AWSAssessment(CloudConnector):
     def assess_compliance(self) -> List[Finding]:
         """Assess compliance frameworks"""
         print("🔍 Assessing Compliance...")
-        
+        start = len(self.findings)
         try:
-            # Check CloudTrail
             self._check_cloudtrail()
-            
-            # Check encryption
             self._check_encryption()
-            
         except Exception as e:
             print(f"Error in compliance assessment: {e}")
-        
-        return self.findings
+        return self.findings[start:]
     
     def _check_cloudtrail(self) -> List[Finding]:
         """AWS_CT_001: CloudTrail enabled"""
@@ -657,15 +629,12 @@ class AWSAssessment(CloudConnector):
     def assess_logging(self) -> List[Finding]:
         """Assess logging configuration"""
         print("🔍 Assessing Logging...")
-        
+        start = len(self.findings)
         try:
-            # Check CloudWatch logs
             self._check_cloudwatch_logs()
-            
         except Exception as e:
             print(f"Error in logging assessment: {e}")
-        
-        return self.findings
+        return self.findings[start:]
     
     def _check_cloudwatch_logs(self) -> List[Finding]:
         """AWS_LOG_001: CloudWatch logs configured"""
